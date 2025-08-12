@@ -2,7 +2,7 @@ import os
 import yaml
 import pandas as pd
 from typing import Tuple
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 import logging
 
 # Configure logging
@@ -40,11 +40,11 @@ def extract_features_and_labels(data: pd.DataFrame, feature_column: str, label_c
         logging.error("Error extracting features and labels: %s", e)
         raise e
 
-def initialize_vectorizer(max_features: int) -> CountVectorizer:
+def initialize_vectorizer(max_features: int) -> TfidfVectorizer:
     try:
-        return CountVectorizer(max_features=max_features)
+        return TfidfVectorizer(max_features=max_features)
     except Exception as e:
-        logging.error("Error initializing CountVectorizer: %s", e)
+        logging.error("Error initializing TfidfVectorizer: %s", e)
         raise e
 
 def save_vectorized_data(features, labels, output_path: str):
@@ -77,8 +77,8 @@ def main() -> None:
         x_test_vectorized = vectorizer.transform(x_test)
 
         # Save interim data
-        save_vectorized_data(x_train_vectorized, y_train, "data/interim/train_bow.csv")
-        save_vectorized_data(x_test_vectorized, y_test, "data/interim/test_bow.csv")
+        save_vectorized_data(x_train_vectorized, y_train, "data/interim/train_tfidf.csv")
+        save_vectorized_data(x_test_vectorized, y_test, "data/interim/test_tfidf.csv")
 
         logging.info("Feature engineering completed")
     except Exception as e:

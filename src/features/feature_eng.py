@@ -1,48 +1,89 @@
-import numpy as np
-import pandas as pd
-
-import re
-import nltk
-import string
-from nltk.corpus import stopwords
-from nltk.stem import SnowballStemmer, WordNetLemmatizer
-from sklearn.feature_extraction.text import CountVectorizer
 import os
+import yaml
+import pandas as pd
+from typing import Tuple
+from sklearn.feature_extraction.text import CountVectorizer
+import logging
 
-# Load the processed training and testing datasets, dropping rows with missing 'content'
-train_data = pd.read_csv("data/processed/train.csv").dropna(subset=['content'])
-test_data = pd.read_csv("data/processed/test.csv").dropna(subset=['content'])
+# Configure logging
+logging.basicConfig(
+    filename="logs/feature_eng.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
-# Extract the 'content' column as features (X) and 'label' column as targets (y) for training and testing
-x_train = train_data['content'].values
-y_train = train_data['sentiment'].values
+def load_params(file_path: str) -> dict:
+    try:
+        with open(file_path, "r") as file:
+            params = yaml.safe_load(file)
+        logging.info("Parameters loaded successfully from %s", file_path)
+        return params
+    except Exception as e:
+        logging.error("Error loading parameters: %s", e)
+        raise e
 
-x_test = test_data['content'].values
-y_test = test_data['sentiment'].values
+def load_data(file_path: str, drop_column: str) -> pd.DataFrame:
+    try:
+        data = pd.read_csv(file_path).dropna(subset=[drop_column])
+        logging.info("Data loaded from %s", file_path)
+        return data
+    except Exception as e:
+        logging.error("Error loading data from %s: %s", file_path, e)
+        raise e
 
-# Initialize the CountVectorizer for Bag of Words feature extraction
-vectorizer = CountVectorizer()
+def extract_features_and_labels(data: pd.DataFrame, feature_column: str, label_column: str) -> Tuple[pd.Series, pd.Series]:
+    try:
+        features = data[feature_column].values
+        labels = data[label_column].values
+        return features, labels
+    except Exception as e:
+        logging.error("Error extracting features and labels: %s", e)
+        raise e
 
-# Fit the vectorizer on the training data and transform it into a sparse matrix
-X_train_bow = vectorizer.fit_transform(x_train)
+def initialize_vectorizer(max_features: int) -> CountVectorizer:
+    try:
+        return CountVectorizer(max_features=max_features)
+    except Exception as e:
+        logging.error("Error initializing CountVectorizer: %s", e)
+        raise e
 
-# Transform the test data using the same vectorizer (to ensure consistency)
-X_test_bow = vectorizer.transform(x_test)
+def save_vectorized_data(features, labels, output_path: str):
+    try:
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        df = pd.DataFrame(features.toarray())
+        df['sentiment'] = labels
+        df.to_csv(output_path, index=False)
+        logging.info("Vectorized data saved to %s", output_path)
+    except Exception as e:
+        logging.error("Error saving vectorized data: %s", e)
+        raise e
 
-# Convert the sparse matrix of training data into a DataFrame
-train_df = pd.DataFrame(X_train_bow.toarray())
+def main() -> None:
+    try:
+        params = load_params("params.yaml")
+        max_features = params['feature_eng']['max_features']
 
-# Add the target labels (y_train) as a new column in the training DataFrame
-train_df['sentiment'] = y_train
+        # Load processed data
+        train_data = load_data("data/processed/train.csv", drop_column='content')
+        test_data = load_data("data/processed/test.csv", drop_column='content')
 
-# Convert the sparse matrix of test data into a DataFrame
-test_df = pd.DataFrame(X_test_bow.toarray())
+        # Extract features and labels
+        x_train, y_train = extract_features_and_labels(train_data, 'content', 'sentiment')
+        x_test, y_test = extract_features_and_labels(test_data, 'content', 'sentiment')
 
-# Add the target labels (y_test) as a new column in the test DataFrame
-test_df['sentiment'] = y_test
+        # Vectorize
+        vectorizer = initialize_vectorizer(max_features)
+        x_train_vectorized = vectorizer.fit_transform(x_train)
+        x_test_vectorized = vectorizer.transform(x_test)
 
-# Save the processed training data with Bag of Words features to a CSV file
-train_df.to_csv("data/interim/train_bow.csv", index=False)
+        # Save interim data
+        save_vectorized_data(x_train_vectorized, y_train, "data/interim/train_bow.csv")
+        save_vectorized_data(x_test_vectorized, y_test, "data/interim/test_bow.csv")
 
-# Save the processed test data with Bag of Words features to a CSV file
-test_df.to_csv("data/interim/test_bow.csv", index=False)
+        logging.info("Feature engineering completed")
+    except Exception as e:
+        logging.error("Feature engineering pipeline failed: %s", e)
+        raise e
+
+if __name__ == "__main__":
+    main()

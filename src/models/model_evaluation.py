@@ -1,35 +1,74 @@
-from sklearn.metrics import accuracy_score
-from sklearn.metrics import precision_score, recall_score, roc_auc_score
 import pickle
 import pandas as pd
 import json
+import os
+from sklearn.metrics import accuracy_score, precision_score, recall_score
+from typing import Dict
+import logging
 
-# Load the trained Random Forest model from the pickle file
-with open("models/random_forest_model.pkl", "rb") as model_file:
-    model = pickle.load(model_file)
+# Configure logging
+logging.basicConfig(
+    filename="logs/model_evaluation.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
-# Load the processed test data
-test_data = pd.read_csv("data/interim/test_bow.csv")
+def load_model(file_path: str) -> object:
+    try:
+        with open(file_path, "rb") as file:
+            model = pickle.load(file)
+        logging.info("Model loaded successfully from %s", file_path)
+        return model
+    except Exception as e:
+        logging.error("Error loading model: %s", e)
+        raise e
 
-# Separate features (X) and target labels (y) from the test data
-x_test = test_data.drop(columns=['sentiment']).values  # Drop the 'label' column to get feature values
-y_test = test_data['sentiment'].values  # Extract the 'label' column as target values
+def load_test_data(file_path: str) -> pd.DataFrame:
+    try:
+        data = pd.read_csv(file_path)
+        logging.info("Test data loaded from %s", file_path)
+        return data
+    except Exception as e:
+        logging.error("Error loading test data: %s", e)
+        raise e
 
-# Use the trained model to make predictions on the test data
-y_pred = model.predict(x_test)
+def evaluate_model(model: object, x_test: pd.DataFrame, y_test: pd.Series) -> Dict[str, float]:
+    try:
+        y_pred = model.predict(x_test)
+        metrics = {
+            "accuracy": accuracy_score(y_test, y_pred),
+            "precision": precision_score(y_test, y_pred, average='weighted'),
+            "recall": recall_score(y_test, y_pred, average='weighted')
+        }
+        logging.info("Model evaluation completed")
+        return metrics
+    except Exception as e:
+        logging.error("Error during evaluation: %s", e)
+        raise e
 
-# Calculate evaluation metrics for the model
-accuracy = accuracy_score(y_test, y_pred)  # Calculate accuracy of the model
-precision = precision_score(y_test, y_pred, average='weighted')  # Calculate precision (weighted average)
-recall = recall_score(y_test, y_pred, average='weighted')  # Calculate recall (weighted average)
+def save_metrics(metrics: Dict[str, float], file_path: str) -> None:
+    try:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        with open(file_path, "w") as file:
+            json.dump(metrics, file, indent=4)
+        logging.info("Evaluation metrics saved to %s", file_path)
+    except Exception as e:
+        logging.error("Error saving metrics: %s", e)
+        raise e
 
-# Store the calculated metrics in a dictionary
-metrics = {
-    "accuracy": accuracy,
-    "precision": precision,
-    "recall": recall
-}
+def main() -> None:
+    try:
+        model = load_model("models/random_forest_model.pkl")
+        test_data = load_test_data("data/interim/test_bow.csv")
 
-# Save the evaluation metrics to a JSON file for future reference
-with open("reports/evaluation_metrics.json", "w") as metrics_file:
-    json.dump(metrics, metrics_file, indent=4)
+        x_test = test_data.drop(columns=['sentiment']).values
+        y_test = test_data['sentiment'].values
+
+        metrics = evaluate_model(model, x_test, y_test)
+        save_metrics(metrics, "reports/evaluation_metrics.json")
+    except Exception as e:
+        logging.error("Model evaluation pipeline failed: %s", e)
+        raise e
+
+if __name__ == "__main__":
+    main()

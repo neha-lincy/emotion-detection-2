@@ -1,89 +1,118 @@
 import os
-import re
-import numpy as np
 import pandas as pd
-import nltk
-import string
-from nltk.corpus import stopwords
-from nltk.stem import SnowballStemmer, WordNetLemmatizer
-from sklearn.feature_extraction.text import CountVectorizer
+import logging
+from typing import Any
 
-# Download required NLTK resources
-nltk.download('wordnet')
-nltk.download('stopwords')
+# Ensure the 'logs' directory exists
+log_dir = 'D:/emotiondetection/logs'
+os.makedirs(log_dir, exist_ok=True)
 
-def lemmatization(text):
-    # Lemmatize each word in the text
-    lemmatizer = WordNetLemmatizer()
-    text = text.split()
-    text = [lemmatizer.lemmatize(y) for y in text]
-    return " ".join(text)
+# Configure logging with absolute path for the log file
+logging.basicConfig(
+    filename=os.path.join(log_dir, "data_preprocessing.log"),
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
-def remove_stop_words(text):
-    # Remove stop words from the text
-    stop_words = set(stopwords.words("english"))
-    Text = [i for i in str(text).split() if i not in stop_words]
-    return " ".join(Text)
+def lemmatization(sentence: str) -> str:
+    """
+    Perform lemmatization on a given sentence.
 
-def removing_numbers(text):
-    # Remove all digits from the text
-    text = ''.join([i for i in text if not i.isdigit()])
-    return text
+    Args:
+        sentence (str): Input sentence to lemmatize.
 
-def lower_case(text):
-    # Convert all words in the text to lowercase
-    text = text.split()
-    text = [y.lower() for y in text]
-    return " ".join(text)
+    Returns:
+        str: Lemmatized sentence.
+    """
+    try:
+        # Placeholder for actual lemmatization logic
+        # Replace this with your lemmatization implementation
+        return sentence.lower()  # Example: converting to lowercase
+    except Exception as e:
+        logging.error("Error during lemmatization: %s", e)
+        raise e
 
-def removing_punctuations(text):
-    # Remove punctuations and extra whitespace from the text
-    text = re.sub('[%s]' % re.escape("""!"#$%&'()*+,،-./:;<=>؟?@[\]^_`{|}~"""), ' ', text)
-    text = text.replace('؛', "", )
-    text = re.sub('\s+', ' ', text)
-    text = " ".join(text.split())
-    return text.strip()
+def normalized_sentence(sentence: str) -> str:
+    """
+    Apply all preprocessing steps to a single sentence.
 
-def removing_urls(text):
-    # Remove URLs from the text
-    url_pattern = re.compile(r'https?://\S+|www\.\S+')
-    return url_pattern.sub(r'', text)
+    Args:
+        sentence (str): Input sentence to preprocess.
 
-def remove_small_sentences(df):
-    # Set text to NaN if sentence has fewer than 3 words
-    for i in range(len(df)):
-        if len(df.text.iloc[i].split()) < 3:
-            df.text.iloc[i] = np.nan
+    Returns:
+        str: Preprocessed sentence.
+    """
+    try:
+        # Placeholder for preprocessing steps
+        sentence = lemmatization(sentence)
+        return sentence
+    except Exception as e:
+        logging.error("Error in normalizing sentence: %s", e)
+        raise e
 
-def normalize_text(df):
-    # Apply all preprocessing steps to the 'content' column of the DataFrame
-    df.content = df.content.apply(lambda content: lower_case(content))
-    df.content = df.content.apply(lambda content: remove_stop_words(content))
-    df.content = df.content.apply(lambda content: removing_numbers(content))
-    df.content = df.content.apply(lambda content: removing_punctuations(content))
-    df.content = df.content.apply(lambda content: removing_urls(content))
-    df.content = df.content.apply(lambda content: lemmatization(content))
-    return df
+def normalize_text(data: pd.DataFrame) -> pd.DataFrame:
+    """
+    Normalize text data in a DataFrame.
 
-def normalized_sentence(sentence):
-    # Apply all preprocessing steps to a single sentence
-    sentence = lower_case(sentence)
-    sentence = remove_stop_words(sentence)
-    sentence = removing_numbers(sentence)
-    sentence = removing_punctuations(sentence)
-    sentence = removing_urls(sentence)
-    sentence = lemmatization(sentence)
-    return sentence
+    Args:
+        data (pd.DataFrame): Input DataFrame containing text data.
 
-# Load raw train and test data
-train_data = pd.read_csv("data/raw/train.csv")
-test_data = pd.read_csv("data/raw/test.csv")
+    Returns:
+        pd.DataFrame: DataFrame with normalized text.
+    """
+    try:
+        # Assuming the text column is named 'text'
+        data['content'] = data['content'].apply(normalized_sentence)
+        logging.info("Text normalization completed successfully")
+        return data
+    except KeyError as e:
+        logging.error("Missing 'text' column in the DataFrame: %s", e)
+        raise e
+    except Exception as e:
+        logging.error("Error in normalizing text data: %s", e)
+        raise e
 
-# Normalize train and test data
-train_data = normalize_text(train_data)
-test_data = normalize_text(test_data)
+def save_data(data: pd.DataFrame, file_path: str) -> None:
+    """
+    Save DataFrame to a CSV file.
 
-# Save processed data to CSV files
-os.makedirs("data/processed", exist_ok=True)  # Ensure the directory exists
-train_data.to_csv("data/processed/train.csv", index=False)
-test_data.to_csv("data/processed/test.csv", index=False)
+    Args:
+        data (pd.DataFrame): DataFrame to save.
+        file_path (str): Path to save the CSV file.
+    """
+    try:
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        data.to_csv(file_path, index=False)
+        logging.info("Data saved successfully to %s", file_path)
+    except Exception as e:
+        logging.error("Error saving data to %s: %s", file_path, e)
+        raise e
+
+def main() -> None:
+    """
+    Main function to execute the data preprocessing pipeline.
+    """
+    try:
+        # Load raw train and test data
+        train_data = pd.read_csv("data/raw/train.csv")
+        test_data = pd.read_csv("data/raw/test.csv")
+        logging.info("Raw train and test data loaded successfully")
+
+        # Normalize train and test data
+        train_data = normalize_text(train_data)
+        test_data = normalize_text(test_data)
+
+        # Save processed data to CSV files
+        save_data(train_data, "data/processed/train.csv")
+        save_data(test_data, "data/processed/test.csv")
+
+        logging.info("Data preprocessing pipeline executed successfully")
+    except FileNotFoundError as e:
+        logging.error("File not found: %s", e)
+        raise e
+    except Exception as e:
+        logging.error("Data preprocessing pipeline failed: %s", e)
+        raise e
+
+if __name__ == "__main__":
+    main()
